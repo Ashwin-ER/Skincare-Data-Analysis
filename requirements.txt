@@ -4,3 +4,5 @@ requests
 beautifulsoup4
 openpyxl
 vaderSentiment
+python-docx
+fpdf2
