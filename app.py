@@ -1,11 +1,9 @@
-# app.py (Final Corrected Version)
+# app.py (Final Corrected Version - NLTK Removed)
 
 import streamlit as st
 import pandas as pd
-import nltk
-from nltk.sentiment.vader import SentimentIntensityAnalyzer
-from nltk.corpus import stopwords
-from nltk.tokenize import word_tokenize
+# Replaced NLTK's VADER with the standalone vaderSentiment package
+from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
 from collections import Counter
 import requests
 from bs4 import BeautifulSoup
@@ -16,31 +14,36 @@ import io
 # --- 1. SET PAGE CONFIG (MUST BE THE FIRST STREAMLIT COMMAND) ---
 st.set_page_config(layout="wide", page_title="Skincare Data Analyst Tool")
 
-# --- 2. DEFINE FUNCTIONS AND DOWNLOAD DATA ---
-@st.cache_resource
-def download_nltk_data():
-    """Checks for and downloads required NLTK data, using the correct exception."""
-    try:
-        nltk.data.find('sentiment/vader_lexicon.zip')
-    except LookupError:
-        nltk.download('vader_lexicon')
-    try:
-        nltk.data.find('tokenizers/punkt')
-    except LookupError:
-        nltk.download('punkt')
-    try:
-        nltk.data.find('corpora/stopwords')
-    except LookupError:
-        nltk.download('stopwords')
+# --- 2. DEFINE CONSTANTS AND FUNCTIONS ---
 
-# Run the download function at the start
-download_nltk_data()
+# Define a set of English stop words to replace nltk.corpus.stopwords
+# This avoids a large library dependency for a simple list of words.
+STOP_WORDS = set([
+    'a', 'about', 'above', 'after', 'again', 'against', 'all', 'am', 'an', 'and', 'any', 'are', "aren't", 'as', 'at',
+    'be', 'because', 'been', 'before', 'being', 'below', 'between', 'both', 'but', 'by',
+    'can', "can't", 'cannot', 'could', "couldn't", 'did', "didn't", 'do', 'does', "doesn't", 'doing', 'don', "don't",
+    'down', 'during', 'each', 'few', 'for', 'from', 'further', 'had', "hadn't", 'has', "hasn't", 'have', "haven't",
+    'having', 'he', "he'd", "he'll", "he's", 'her', 'here', "here's", 'hers', 'herself', 'him', 'himself', 'his', 'how',
+    "how's", 'i', "i'd", "i'll", "i'm", "i've", 'if', 'in', 'into', 'is', "isn't", 'it', "it's", 'its', 'itself',
+    "let's", 'me', 'more', 'most', "mustn't", 'my', 'myself', 'no', 'nor', 'not', 'of', 'off', 'on', 'once', 'only',
+    'or', 'other', 'ought', 'our', 'ours', 'ourselves', 'out', 'over', 'own', 'same', 'shan', "shan't", 'she', "she'd",
+    "she'll", "she's", 'should', "shouldn't", 'so', 'some', 'such', 'than', 'that', "that's", 'the', 'their', 'theirs',
+    'them', 'themselves', 'then', 'there', "there's", 'these', 'they', "they'd", "they'll", "they're", "they've", 'this',
+    'those', 'through', 'to', 'too', 'under', 'until', 'up', 'very', 'was', "wasn't", 'we', "we'd", "we'll", "we're",
+    "we've", 'were', "weren't", 'what', "what's", 'when', "when's", 'where', "where's", 'which', 'while', 'who', "who's",
+    'whom', 'why', "why's", 'with', 'won', "won't", 'would', "wouldn't", 'you', "you'd", "you'll", "you're", "you've",
+    'your', 'yours', 'yourself', 'yourselves'
+])
+# Add custom stop words relevant to the skincare domain
+STOP_WORDS.update(['skin', 'product', 'products', 'use', 'using', 'like', 'get', 'help', 'really', 'ive', 'im', 'would', 'routine', 'feel', 'look'])
+
 
 # --- CORE ANALYSIS FUNCTIONS ---
 
 @st.cache_data
 def analyze_product_mentions(text_data, product_list, claim_keywords, platform):
     """Analyzes text data for product mentions, sentiment, and claims."""
+    # Use the standalone vaderSentiment library
     sid = SentimentIntensityAnalyzer()
     product_mentions = []
 
@@ -51,20 +54,20 @@ def analyze_product_mentions(text_data, product_list, claim_keywords, platform):
                 if sentiment_score >= 0.05: sentiment = "Positive"
                 elif sentiment_score <= -0.05: sentiment = "Negative"
                 else: sentiment = "Mixed"
-                
+
                 found_claim = "General Skincare"
                 for claim, keywords in claim_keywords.items():
                     if any(keyword in text.lower() for keyword in keywords):
                         found_claim = claim
                         break
-                
+
                 product_mentions.append({
                     "Product Name": product,
                     "Platform Mentioned On": platform,
                     "Most Common Use or Claim": found_claim,
                     "User Sentiment": sentiment
                 })
-    
+
     if not product_mentions: return pd.DataFrame()
 
     df = pd.DataFrame(product_mentions)
@@ -73,17 +76,17 @@ def analyze_product_mentions(text_data, product_list, claim_keywords, platform):
 
 @st.cache_data
 def get_trending_keywords(text_data):
-    """Extracts trending keywords/phrases from text data."""
-    stop_words = set(stopwords.words('english'))
-    stop_words.update(['skin', 'product', 'products', 'use', 'using', 'like', 'get', 'help', 'really', 'ive', 'im', 'would', 'routine', 'feel', 'look'])
+    """Extracts trending keywords/phrases from text data using standard Python libraries."""
     all_words = []
     for text in text_data:
-        words = [word for word in word_tokenize(text.lower()) if word.isalpha() and word not in stop_words and len(word) > 2]
+        # Use regex to find all words, replacing nltk.word_tokenize
+        words = [word for word in re.findall(r'\b\w+\b', text.lower()) if word not in STOP_WORDS and len(word) > 2]
         all_words.extend(words)
 
-    bigrams = list(nltk.bigrams(all_words))
+    # Create bigrams (word pairs) using zip, replacing nltk.bigrams
+    bigrams = list(zip(all_words, all_words[1:]))
     bigram_freq = Counter(bigrams)
-    
+
     keyword_insights = []
     for phrase, _ in bigram_freq.most_common(5):
         keyword = ' '.join(phrase)
@@ -133,13 +136,13 @@ This tool helps you analyze skincare discussions from online sources.
 # --- SIDEBAR FOR CONFIGURATION ---
 with st.sidebar:
     st.header("⚙️ Configuration")
-    
+
     DEFAULT_PRODUCTS = [
         "CeraVe", "The Ordinary", "La Roche-Posay", "Paula's Choice", "SkinCeuticals",
         "Drunk Elephant", "Supergoop", "EltaMD", "Tretinoin", "Kojic Acid",
         "Azelaic Acid", "Niacinamide", "Hyaluronic Acid", "Vitamin C Serum", "Anthelios"
     ]
-    
+
     CLAIM_KEYWORDS = {
         "Fades Dark Spots / Hyperpigmentation": ["hyperpigmentation", "dark spots", "pih", "melasma", "even tone", "brighter"],
         "Helps Acne / Breakouts": ["acne", "pimples", "breakouts", "clogged pores", "comedones"],
@@ -154,7 +157,7 @@ with st.sidebar:
         options=DEFAULT_PRODUCTS,
         default=DEFAULT_PRODUCTS[:7]
     )
-    
+
     platform_name = st.text_input(
         "Platform Mentioned On:",
         value="TikTok / Online Forums"
@@ -181,10 +184,10 @@ if st.button("🚀 Analyze Data"):
     else:
         with st.spinner("Analyzing your data... This may take a moment."):
             text_lines = [line.strip() for line in user_text.strip().split('\n') if line.strip()]
-            
+
             df_summary = analyze_product_mentions(text_lines, selected_products, CLAIM_KEYWORDS, platform_name)
             df_keywords = get_trending_keywords(text_lines)
-            
+
             manufacturer_info = []
             if not df_summary.empty:
                 top_2_products = df_summary['Product Name'].unique()[:2]
@@ -195,11 +198,11 @@ if st.button("🚀 Analyze Data"):
                         "Official Link (Best Guess)": link,
                         "Note": note
                     })
-                    time.sleep(0.5) 
+                    time.sleep(0.5)
             df_manufacturer = pd.DataFrame(manufacturer_info)
 
             st.success("Analysis Complete!")
-            
+
             st.header("📊 Results")
 
             if df_summary.empty:
@@ -210,7 +213,7 @@ if st.button("🚀 Analyze Data"):
 
                 st.subheader("2. Trend & Keyword Insights")
                 st.dataframe(df_keywords, use_container_width=True)
-                
+
                 st.subheader("3. Manufacturer Info (Basic Trace)")
                 st.dataframe(df_manufacturer, use_container_width=True)
 
@@ -219,7 +222,7 @@ if st.button("🚀 Analyze Data"):
                     'Trend & Keyword Insights': df_keywords,
                     'Manufacturer Info': df_manufacturer
                 })
-                
+
                 st.download_button(
                     label="📥 Download Full Report as Excel",
                     data=excel_data,
