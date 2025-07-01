@@ -1,4 +1,4 @@
-# app.py (Final Corrected and Simplified Version)
+# app.py (Final Polished Version)
 
 import streamlit as st
 import pandas as pd
@@ -10,9 +10,8 @@ import re
 import time
 import io
 
-# New imports for Word and PDF generation
+# Imports for Word and PDF generation
 from docx import Document
-# CORRECTED IMPORT: We only need FPDF, not Align.
 from fpdf import FPDF
 
 # --- 1. SET PAGE CONFIG ---
@@ -40,7 +39,7 @@ STOP_WORDS = set([
 STOP_WORDS.update(['skin', 'product', 'products', 'use', 'using', 'like', 'get', 'help', 'really', 'ive', 'im', 'would', 'routine', 'feel', 'look'])
 
 
-# --- CORE ANALYSIS FUNCTIONS (UNCHANGED) ---
+# --- CORE ANALYSIS FUNCTIONS ---
 @st.cache_data
 def analyze_product_mentions(text_data, product_list, claim_keywords, platform):
     sid = SentimentIntensityAnalyzer()
@@ -147,9 +146,20 @@ class PDF(FPDF):
 
         self.set_font('Arial', '', 8)
         for _, row in df.iterrows():
+            # Using multi_cell to handle text wrapping automatically
+            y_before = self.get_y()
+            x_before = self.get_x()
+            max_height = 10 # Base height
+            
+            # Draw cells and track max height for the row
             for item in row:
-                self.cell(w=col_width, h=10, txt=str(item), border=1, align='L')
-            self.ln()
+                self.multi_cell(w=col_width, h=10, txt=str(item), border=1, align='L')
+                if self.get_y() > y_before + max_height:
+                    max_height = self.get_y() - y_before
+                self.set_xy(self.get_x() + col_width, y_before)
+
+            self.set_xy(x_before, y_before + max_height)
+            
         self.ln(10)
 
 def to_pdf(df_dict):
@@ -158,7 +168,8 @@ def to_pdf(df_dict):
     for sheet_name, df in df_dict.items():
         pdf.chapter_title(sheet_name)
         pdf.chapter_body(df)
-    return pdf.output(dest='S').encode('latin-1')
+    # CORRECTED: pdf.output() already returns bytes. No .encode() needed.
+    return pdf.output()
 
 # --- 3. BUILD THE APP LAYOUT ---
 st.title("🧪 Skincare Data Analysis Assistant")
@@ -199,8 +210,8 @@ if st.button("🚀 Analyze Data"):
             df_keywords = get_trending_keywords(text_lines)
             manufacturer_info = []
             if not df_summary.empty:
-                top_2_products = df_summary['Product Name'].unique()[:2]
-                for product in top_2_products:
+                unique_products = df_summary['Product Name'].unique()
+                for product in unique_products[:2]: # Limit to top 2 unique products
                     link, note = trace_manufacturer(product)
                     manufacturer_info.append({"Product Name": product, "Official Link (Best Guess)": link, "Note": note})
                     time.sleep(0.5) 
