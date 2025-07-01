@@ -1,4 +1,4 @@
-# app.py (Final Version with Word & PDF Download)
+# app.py (Final Corrected and Simplified Version)
 
 import streamlit as st
 import pandas as pd
@@ -12,6 +12,7 @@ import io
 
 # New imports for Word and PDF generation
 from docx import Document
+# CORRECTED IMPORT: We only need FPDF, not Align.
 from fpdf import FPDF
 
 # --- 1. SET PAGE CONFIG ---
@@ -105,38 +106,21 @@ def to_excel(df_dict):
             df.to_excel(writer, sheet_name=sheet_name, index=False)
     return output.getvalue()
 
-# NEW: Function to generate a Word document
 def to_word(df_dict):
     document = Document()
     document.add_heading('Skincare Analysis Report', 0)
-
     for sheet_name, df in df_dict.items():
         if df.empty: continue
         document.add_heading(sheet_name, level=1)
-        
-        # Add a table to the document
-        table = document.add_table(rows=1, cols=df.shape[1])
-        table.style = 'Table Grid'
-        
-        # Add the header rows
-        for i, column_name in enumerate(df.columns):
-            table.cell(0, i).text = str(column_name)
-
-        # Add the rest of the data frame
-        for index, row in df.iterrows():
+        table = document.add_table(rows=1, cols=df.shape[1]); table.style = 'Table Grid'
+        for i, column_name in enumerate(df.columns): table.cell(0, i).text = str(column_name)
+        for _, row in df.iterrows():
             cells = table.add_row().cells
-            for i, value in enumerate(row):
-                cells[i].text = str(value)
-        
-        document.add_paragraph() # Add some space between tables
-
-    # Save document to a byte stream
-    doc_io = io.BytesIO()
-    document.save(doc_io)
-    doc_io.seek(0)
+            for i, value in enumerate(row): cells[i].text = str(value)
+        document.add_paragraph()
+    doc_io = io.BytesIO(); document.save(doc_io); doc_io.seek(0)
     return doc_io.getvalue()
 
-# NEW: Function to generate a PDF document
 class PDF(FPDF):
     def header(self):
         self.set_font('Arial', 'B', 12)
@@ -153,36 +137,28 @@ class PDF(FPDF):
             self.cell(0, 10, "No data available for this section.", 0, 1)
             self.ln()
             return
-
-        # Determine column widths
-        col_width = self.w / (len(df.columns) + 0.5)  # Adjust divisor for padding
+            
+        col_width = self.w / (len(df.columns) + 0.5)
         
-        # Header
         self.set_font('Arial', 'B', 8)
         for col in df.columns:
-            self.cell(col_width, 10, col, 1, 0, 'C')
+            self.cell(col_width, 10, str(col), 1, 0, 'C')
         self.ln()
 
-        # Data
         self.set_font('Arial', '', 8)
-        for index, row in df.iterrows():
+        for _, row in df.iterrows():
             for item in row:
-                self.multi_cell(col_width, 10, str(item), 1, 0, 'L')
+                self.cell(w=col_width, h=10, txt=str(item), border=1, align='L')
             self.ln()
-        self.ln(10) # Space after table
-
+        self.ln(10)
 
 def to_pdf(df_dict):
-    pdf = PDF(orientation='L', unit='mm', format='A4') # Landscape for more space
+    pdf = PDF(orientation='L', unit='mm', format='A4')
     pdf.add_page()
-    
     for sheet_name, df in df_dict.items():
         pdf.chapter_title(sheet_name)
         pdf.chapter_body(df)
-        
-    # FPDF.output() returns bytes when the first argument is not a file name
     return pdf.output(dest='S').encode('latin-1')
-
 
 # --- 3. BUILD THE APP LAYOUT ---
 st.title("🧪 Skincare Data Analysis Assistant")
@@ -193,7 +169,6 @@ This tool helps analyze skincare discussions from online sources.
 3.  **Click 'Analyze Data'** to see insights and download reports.
 """)
 
-# --- SIDEBAR FOR CONFIGURATION ---
 with st.sidebar:
     st.header("⚙️ Configuration")
     DEFAULT_PRODUCTS = ["CeraVe", "The Ordinary", "La Roche-Posay", "Paula's Choice", "SkinCeuticals", "Drunk Elephant", "Supergoop", "EltaMD", "Tretinoin", "Kojic Acid", "Azelaic Acid", "Niacinamide", "Hyaluronic Acid", "Vitamin C Serum", "Anthelios"]
@@ -208,9 +183,8 @@ with st.sidebar:
     selected_products = st.multiselect("Select products to search for:", options=DEFAULT_PRODUCTS, default=DEFAULT_PRODUCTS[:7])
     platform_name = st.text_input("Platform Mentioned On:", value="TikTok / Online Forums")
 
-# --- MAIN PAGE FOR INPUT AND OUTPUT ---
 st.header("1. Paste Your Research Data")
-default_text = "I've been using The Ordinary's Niacinamide for a month and my pores look smaller! Amazing for oily skin.\nHas anyone tried the La Roche-Posay Anthelios sunscreen? Worried about a white cast.\nUgh, the Drunk Elephant Vitamin C serum completely broke me out. A negative experience for me.\nThe CeraVe hydrating cleanser is my holy grail for dry skin. It's so gentle.\nLooking for a good hyperpigmentation fix. Someone suggested Kojic Acid soap.\nThis tretinoin journey is tough, my skin is peeling so much but my acne is getting better. It's a mixed bag."
+default_text = "I've been using The Ordinary's Niacinamide for a month and my pores look smaller! Amazing for oily skin.\nHas anyone tried the La Roche-Posay Anthelios sunscreen? Worried about a white cast.\nUgh, the Drunk Elephant Vitamin C serum completely broke me out. A negative experience for me.\nThe CeraVe hydrating cleanser is my holy grail for dry skin. It's so gentle.\nLooking for a good hyperpigmentation fix. Someone suggested Kojic Acid soap.\nThis tretinoin journey is tough, my skin is peeling so much but my acne is slowly getting better. It's a mixed bag."
 user_text = st.text_area("Each new line should be a separate comment or post.", default_text, height=250)
 
 if st.button("🚀 Analyze Data"):
@@ -221,10 +195,8 @@ if st.button("🚀 Analyze Data"):
     else:
         with st.spinner("Analyzing your data... This may take a moment."):
             text_lines = [line.strip() for line in user_text.strip().split('\n') if line.strip()]
-            
             df_summary = analyze_product_mentions(text_lines, selected_products, CLAIM_KEYWORDS, platform_name)
             df_keywords = get_trending_keywords(text_lines)
-            
             manufacturer_info = []
             if not df_summary.empty:
                 top_2_products = df_summary['Product Name'].unique()[:2]
@@ -235,7 +207,6 @@ if st.button("🚀 Analyze Data"):
             df_manufacturer = pd.DataFrame(manufacturer_info)
 
             st.success("Analysis Complete!")
-            
             st.header("📊 Results")
 
             if df_summary.empty:
@@ -243,51 +214,21 @@ if st.button("🚀 Analyze Data"):
             else:
                 st.subheader("1. Product Mention Summary")
                 st.dataframe(df_summary, use_container_width=True)
-
                 st.subheader("2. Trend & Keyword Insights")
                 st.dataframe(df_keywords, use_container_width=True)
-                
                 st.subheader("3. Manufacturer Info (Basic Trace)")
                 st.dataframe(df_manufacturer, use_container_width=True)
 
-                # --- DOWNLOAD SECTION ---
                 st.subheader("📥 Download Full Report")
-                
-                # Prepare data for download
-                report_data_dict = {
-                    'Product Mention Summary': df_summary,
-                    'Trend & Keyword Insights': df_keywords,
-                    'Manufacturer Info': df_manufacturer
-                }
-                
-                # Generate files in memory
+                report_data_dict = {'Product Mention Summary': df_summary, 'Trend & Keyword Insights': df_keywords, 'Manufacturer Info': df_manufacturer}
                 excel_data = to_excel(report_data_dict)
                 word_data = to_word(report_data_dict)
                 pdf_data = to_pdf(report_data_dict)
                 
-                # Display download buttons in columns
                 col1, col2, col3 = st.columns(3)
                 with col1:
-                    st.download_button(
-                        label="📄 Download as Excel",
-                        data=excel_data,
-                        file_name="Skincare_Analysis_Report.xlsx",
-                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                        use_container_width=True
-                    )
+                    st.download_button(label="📄 Download as Excel", data=excel_data, file_name="Skincare_Analysis_Report.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", use_container_width=True)
                 with col2:
-                    st.download_button(
-                        label="📄 Download as Word",
-                        data=word_data,
-                        file_name="Skincare_Analysis_Report.docx",
-                        mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-                        use_container_width=True
-                    )
+                    st.download_button(label="📄 Download as Word", data=word_data, file_name="Skincare_Analysis_Report.docx", mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document", use_container_width=True)
                 with col3:
-                    st.download_button(
-                        label="📄 Download as PDF",
-                        data=pdf_data,
-                        file_name="Skincare_Analysis_Report.pdf",
-                        mime="application/pdf",
-                        use_container_width=True
-                    )
+                    st.download_button(label="📄 Download as PDF", data=pdf_data, file_name="Skincare_Analysis_Report.pdf", mime="application/pdf", use_container_width=True)
